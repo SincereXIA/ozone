@@ -554,6 +554,11 @@ public class ContainerStateMachine extends BaseStateMachine {
             new IllegalStateException(
                 "DataStream: " + stream + " is not closed properly"));
       } else {
+        try {
+          ((StreamDataChannel) stream.getDataChannel()).link(entry);
+        } catch (IOException e) {
+          return JavaUtils.completeExceptionally(e);
+        }
         return CompletableFuture.completedFuture(null);
       }
     }, executor);

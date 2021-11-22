@@ -178,13 +178,33 @@ public class KeyValueHandler extends Handler {
 
   @Override
   public StateMachine.DataChannel getStreamDataChannel(
-          Container container, ContainerCommandRequestProto msg)
-          throws StorageContainerException {
+      Container container, ContainerCommandRequestProto msg)
+      throws StorageContainerException {
     KeyValueContainer kvContainer = (KeyValueContainer) container;
     checkContainerOpen(kvContainer);
-    BlockID blockID = BlockID.getFromProtobuf(msg.getWriteChunk().getBlockID());
-    return chunkManager.getStreamDataChannel(kvContainer,
-            blockID, metrics);
+
+    if (msg.hasWriteChunk()) {
+      BlockID blockID =
+          BlockID.getFromProtobuf(msg.getWriteChunk().getBlockID());
+
+      return chunkManager.getStreamDataChannel(kvContainer,
+          blockID, false, 0, metrics);
+    } else if (msg.hasPutSmallFile()) {
+      PutSmallFileRequestProto putSmallFile = msg.getPutSmallFile();
+      BlockID blockID = BlockID.getFromProtobuf(
+          putSmallFile.getBlock().getBlockData().getBlockID());
+
+      return chunkManager.getStreamDataChannel(kvContainer,
+          blockID, true, putSmallFile.getBlock().getBlockData().getSize(),
+          metrics);
+    } else {
+      LOG.error(
+          "Get stream data channel error Malformed request " +
+              "containerID: {} msg: {}",
+          container.getContainerData().getContainerID(), msg);
+      throw new StorageContainerException("Malformed request.",
+          ContainerProtos.Result.IO_EXCEPTION);
+    }
   }
 
   @Override
@@ -265,10 +285,19 @@ public class KeyValueHandler extends Handler {
   ContainerCommandResponseProto handleStreamInit(
       ContainerCommandRequestProto request, KeyValueContainer kvContainer,
       DispatcherContext dispatcherContext) {
-    if (!request.hasWriteChunk()) {
+
+    BlockID blockID;
+    if (request.hasWriteChunk()) {
+      WriteChunkRequestProto writeChunk = request.getWriteChunk();
+      blockID = BlockID.getFromProtobuf(writeChunk.getBlockID());
+    } else if (request.hasPutSmallFile()) {
+      PutSmallFileRequestProto putSmallFile = request.getPutSmallFile();
+      blockID = BlockID
+          .getFromProtobuf(putSmallFile.getBlock().getBlockData().getBlockID());
+    } else {
       if (LOG.isDebugEnabled()) {
-        LOG.debug("Malformed Write Chunk request. trace ID: {}",
-            request.getTraceID());
+        LOG.debug("Malformed {} request. trace ID: {}",
+            request.getCmdType(), request.getTraceID());
       }
       return malformedRequest(request);
     }
@@ -276,13 +305,8 @@ public class KeyValueHandler extends Handler {
     String path = null;
     try {
       checkContainerOpen(kvContainer);
-
-      WriteChunkRequestProto writeChunk = request.getWriteChunk();
-      BlockID blockID = BlockID.getFromProtobuf(writeChunk.getBlockID());
-
       path = chunkManager
           .streamInit(kvContainer, blockID);
-
     } catch (StorageContainerException ex) {
       return ContainerUtils.logAndReturnError(LOG, ex, request);
     }
@@ -943,7 +967,7 @@ public class KeyValueHandler extends Handler {
    * @param kvContainer
    * @throws StorageContainerException
    */
-  private void checkContainerOpen(KeyValueContainer kvContainer)
+  public static void checkContainerOpen(KeyValueContainer kvContainer)
       throws StorageContainerException {
 
     final State containerState = kvContainer.getContainerState();
