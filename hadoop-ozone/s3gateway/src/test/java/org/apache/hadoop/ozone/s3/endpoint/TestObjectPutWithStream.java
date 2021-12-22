@@ -20,11 +20,7 @@
 
 package org.apache.hadoop.ozone.s3.endpoint;
 
-import javax.ws.rs.core.HttpHeaders;
-import javax.ws.rs.core.Response;
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-
+import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.hdds.client.ReplicationType;
 import org.apache.hadoop.hdds.conf.OzoneConfiguration;
 import org.apache.hadoop.ozone.client.OzoneClient;
@@ -32,30 +28,34 @@ import org.apache.hadoop.ozone.client.OzoneClientStub;
 import org.apache.hadoop.ozone.client.OzoneKeyDetails;
 import org.apache.hadoop.ozone.client.io.OzoneInputStream;
 import org.apache.hadoop.ozone.s3.exception.OS3Exception;
-
-import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.ozone.s3.exception.S3ErrorTable;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mockito;
 
+import javax.ws.rs.core.HttpHeaders;
+import javax.ws.rs.core.Response;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.apache.hadoop.ozone.s3.util.S3Consts.COPY_SOURCE_HEADER;
 import static org.apache.hadoop.ozone.s3.util.S3Consts.STORAGE_CLASS_HEADER;
 import static org.apache.hadoop.ozone.s3.util.S3Utils.urlEncode;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.when;
 
 /**
  * Test put object.
  */
-public class TestObjectPut {
+public class TestObjectPutWithStream {
   public static final String CONTENT = "0123456789";
-  private String bucketName = "b1";
+  private String bucketName = "streamb1";
   private String keyName = "key=value/1";
-  private String destBucket = "b2";
+  private String destBucket = "streamb2";
   private String destkey = "key=value/2";
   private String nonexist = "nonexist";
   private OzoneClient clientStub;
@@ -75,7 +75,12 @@ public class TestObjectPut {
     objectEndpoint.setClient(clientStub);
 
     objectEndpoint.setOzoneConfiguration(new OzoneConfiguration());
-    objectEndpoint.setDatastreamEnabled(false);
+    objectEndpoint.setDatastreamEnabled(true);
+  }
+
+  @Test
+  public void testEnableStream() {
+    assertTrue(objectEndpoint.isDatastreamEnabled());
   }
 
   @Test

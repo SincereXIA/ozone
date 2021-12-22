@@ -53,6 +53,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.OptionalLong;
 
+import org.apache.hadoop.hdds.client.ReplicationConfig;
 import org.apache.hadoop.hdds.client.ReplicationFactor;
 import org.apache.hadoop.hdds.client.ReplicationType;
 import org.apache.hadoop.hdds.conf.OzoneConfiguration;
@@ -87,6 +88,10 @@ import org.apache.commons.io.IOUtils;
 
 import org.apache.commons.lang3.tuple.Pair;
 
+import static org.apache.hadoop.hdds.scm.ScmConfigKeys.OZONE_SCM_CHUNK_SIZE_DEFAULT;
+import static org.apache.hadoop.hdds.scm.ScmConfigKeys.OZONE_SCM_CHUNK_SIZE_KEY;
+import static org.apache.hadoop.ozone.OzoneConfigKeys.DFS_CONTAINER_RATIS_DATASTREAM_ENABLE;
+import static org.apache.hadoop.ozone.OzoneConfigKeys.DFS_CONTAINER_RATIS_DATASTREAM_ENABLE_DEFAULT;
 import static org.apache.hadoop.ozone.om.OMConfigKeys.OZONE_OM_ENABLE_FILESYSTEM_PATHS;
 import static org.apache.hadoop.ozone.s3.S3GatewayConfigKeys.OZONE_S3G_CLIENT_BUFFER_SIZE_DEFAULT;
 import static org.apache.hadoop.ozone.s3.S3GatewayConfigKeys.OZONE_S3G_CLIENT_BUFFER_SIZE_KEY;
@@ -125,6 +130,8 @@ public class ObjectEndpoint extends EndpointBase {
 
   private List<String> customizableGetHeaders = new ArrayList<>();
   private int bufferSize;
+  private int chunkSize;
+  private boolean datastreamEnabled;
 
   public ObjectEndpoint() {
     customizableGetHeaders.add("Content-Type");
@@ -143,6 +150,13 @@ public class ObjectEndpoint extends EndpointBase {
     bufferSize = (int) ozoneConfiguration.getStorageSize(
         OZONE_S3G_CLIENT_BUFFER_SIZE_KEY,
         OZONE_S3G_CLIENT_BUFFER_SIZE_DEFAULT, StorageUnit.BYTES);
+    chunkSize = (int) ozoneConfiguration.getStorageSize(
+        OZONE_SCM_CHUNK_SIZE_KEY,
+        OZONE_SCM_CHUNK_SIZE_DEFAULT,
+        StorageUnit.BYTES);
+    datastreamEnabled = ozoneConfiguration.getBoolean(
+        DFS_CONTAINER_RATIS_DATASTREAM_ENABLE,
+        DFS_CONTAINER_RATIS_DATASTREAM_ENABLE_DEFAULT);
   }
 
   /**
@@ -195,16 +209,19 @@ public class ObjectEndpoint extends EndpointBase {
 
       // Normal put object
       OzoneBucket bucket = getBucket(bucketName);
-
-      output = bucket.createKey(keyPath, length, replicationType,
-          replicationFactor, new HashMap<>());
-
       if ("STREAMING-AWS4-HMAC-SHA256-PAYLOAD"
           .equals(headers.getHeaderString("x-amz-content-sha256"))) {
         body = new SignedChunksInputStream(body);
       }
 
-      IOUtils.copy(body, output);
+      if (datastreamEnabled) {
+        return ObjectEndpointStreaming
+            .put(bucket, keyPath, length, s3StorageType, chunkSize, body);
+      } else {
+        output = bucket.createKey(keyPath, length, replicationType,
+            replicationFactor, new HashMap<>());
+        IOUtils.copy(body, output);
+      }
 
       return Response.ok().status(HttpStatus.SC_OK)
           .build();
@@ -579,7 +596,6 @@ public class ObjectEndpoint extends EndpointBase {
       throws IOException, OS3Exception {
     try {
       OzoneBucket ozoneBucket = getBucket(bucket);
-      String copyHeader;
       OzoneOutputStream ozoneOutputStream = null;
 
       if ("STREAMING-AWS4-HMAC-SHA256-PAYLOAD"
@@ -587,10 +603,26 @@ public class ObjectEndpoint extends EndpointBase {
         body = new SignedChunksInputStream(body);
       }
 
+      String copyHeader = headers.getHeaderString(COPY_SOURCE_HEADER);
+
       try {
+        if (datastreamEnabled && copyHeader != null) {
+          Pair<String, String> result = parseSourceHeader(copyHeader);
+          String sourceBucket = result.getLeft();
+          String sourceKey = result.getRight();
+          OzoneBucket sourceOzoneBucket = getBucket(sourceBucket);
+          return ObjectEndpointStreaming
+              .copyMultipartKey(Pair.of(sourceOzoneBucket, sourceKey),
+                  Pair.of(ozoneBucket, key), length, partNumber, uploadID,
+                  chunkSize, headers);
+        } else if (datastreamEnabled) {
+          return ObjectEndpointStreaming
+              .createMultipartKey(ozoneBucket, key, length, partNumber,
+                  uploadID, chunkSize, body);
+        }
+
         ozoneOutputStream = ozoneBucket.createMultipartKey(
             key, length, partNumber, uploadID);
-        copyHeader = headers.getHeaderString(COPY_SOURCE_HEADER);
         if (copyHeader != null) {
           Pair<String, String> result = parseSourceHeader(copyHeader);
 
@@ -624,6 +656,7 @@ public class ObjectEndpoint extends EndpointBase {
                     "Bytes to skip: "
                         + rangeHeader.getStartOffset() + " actual: " + skipped);
               }
+
               IOUtils.copyLarge(sourceObject, ozoneOutputStream, 0,
                   rangeHeader.getEndOffset() - rangeHeader.getStartOffset()
                       + 1);
@@ -640,10 +673,12 @@ public class ObjectEndpoint extends EndpointBase {
         }
       }
 
-      assert ozoneOutputStream != null;
-      OmMultipartCommitUploadPartInfo omMultipartCommitUploadPartInfo =
-          ozoneOutputStream.getCommitUploadPartInfo();
-      String eTag = omMultipartCommitUploadPartInfo.getPartName();
+      String eTag = "";
+      if (ozoneOutputStream != null) {
+        OmMultipartCommitUploadPartInfo omMultipartCommitUploadPartInfo =
+            ozoneOutputStream.getCommitUploadPartInfo();
+        eTag = omMultipartCommitUploadPartInfo.getPartName();
+      }
 
       if (copyHeader != null) {
         return Response.ok(new CopyPartResult(eTag)).build();
@@ -772,7 +807,6 @@ public class ObjectEndpoint extends EndpointBase {
         }
       }
 
-
       OzoneBucket sourceOzoneBucket = getBucket(sourceBucket);
       OzoneBucket destOzoneBucket = getBucket(destBucket);
 
@@ -781,15 +815,23 @@ public class ObjectEndpoint extends EndpointBase {
 
       sourceInputStream = sourceOzoneBucket.readKey(sourceKey);
 
-      destOutputStream = destOzoneBucket.createKey(destkey, sourceKeyLen,
-          replicationType, replicationFactor, new HashMap<>());
+      if (datastreamEnabled) {
+        ObjectEndpointStreaming
+            .putKeyWithStream(destOzoneBucket, destkey, sourceKeyLen, chunkSize,
+                ReplicationConfig
+                    .fromTypeAndFactor(replicationType, replicationFactor),
+                new HashMap<>(), sourceInputStream);
+      } else {
+        destOutputStream = destOzoneBucket.createKey(destkey, sourceKeyLen,
+            replicationType, replicationFactor, new HashMap<>());
 
-      IOUtils.copy(sourceInputStream, destOutputStream);
+        IOUtils.copy(sourceInputStream, destOutputStream);
+        destOutputStream.close();
+      }
 
       // Closing here, as if we don't call close this key will not commit in
       // OM, and getKey fails.
       sourceInputStream.close();
-      destOutputStream.close();
       closed = true;
 
       OzoneKeyDetails destKeyDetails = destOzoneBucket.getKey(destkey);
@@ -891,7 +933,8 @@ public class ObjectEndpoint extends EndpointBase {
     }
   }
 
-  private boolean checkCopySourceModificationTime(Long lastModificationTime,
+  public static boolean checkCopySourceModificationTime(
+      Long lastModificationTime,
       String copySourceIfModifiedSinceStr,
       String copySourceIfUnmodifiedSinceStr) {
     long copySourceIfModifiedSince = Long.MIN_VALUE;
@@ -915,5 +958,15 @@ public class ObjectEndpoint extends EndpointBase {
   @VisibleForTesting
   public void setOzoneConfiguration(OzoneConfiguration config) {
     this.ozoneConfiguration = config;
+  }
+
+  @VisibleForTesting
+  public boolean isDatastreamEnabled() {
+    return datastreamEnabled;
+  }
+
+  @VisibleForTesting
+  public void setDatastreamEnabled(boolean datastreamEnabled) {
+    this.datastreamEnabled = datastreamEnabled;
   }
 }

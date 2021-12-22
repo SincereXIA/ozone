@@ -22,6 +22,7 @@ package org.apache.hadoop.ozone.client;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -38,7 +39,9 @@ import org.apache.hadoop.hdds.client.ReplicationType;
 import org.apache.hadoop.hdds.client.StandaloneReplicationConfig;
 import org.apache.hadoop.hdds.protocol.StorageType;
 import org.apache.hadoop.hdds.protocol.proto.HddsProtos;
+import org.apache.hadoop.hdds.scm.storage.ByteBufferStreamOutput;
 import org.apache.hadoop.ozone.OzoneAcl;
+import org.apache.hadoop.ozone.client.io.OzoneDataStreamOutput;
 import org.apache.hadoop.ozone.client.io.OzoneInputStream;
 import org.apache.hadoop.ozone.client.io.OzoneOutputStream;
 import org.apache.hadoop.ozone.client.OzoneMultipartUploadPartListParts.PartInfo;
@@ -218,6 +221,49 @@ public class OzoneBucketStub extends OzoneBucket {
             }
           };
       return new OzoneOutputStreamStub(byteArrayOutputStream, key + size);
+    }
+  }
+
+  @Override
+  public OzoneDataStreamOutput createMultipartStreamKey(String key,
+                                                        long size,
+                                                        int partNumber,
+                                                        String uploadID)
+      throws IOException {
+    String multipartUploadID = multipartUploadIdMap.get(key);
+    if (multipartUploadID == null || !multipartUploadID.equals(uploadID)) {
+      throw new OMException(ResultCodes.NO_SUCH_MULTIPART_UPLOAD_ERROR);
+    } else {
+      ByteBufferStreamOutput byteBufferStreamOutput =
+          new ByteBufferStreamOutput() {
+
+            private final ByteBuffer buffer = ByteBuffer.allocate((int) size);
+
+            @Override
+            public void close() throws IOException {
+              buffer.flip();
+              Part part = new Part(key + size, buffer.array());
+              if (partList.get(key) == null) {
+                Map<Integer, Part> parts = new TreeMap<>();
+                parts.put(partNumber, part);
+                partList.put(key, parts);
+              } else {
+                partList.get(key).put(partNumber, part);
+              }
+            }
+
+            @Override
+            public void write(ByteBuffer b, int off, int len)
+                throws IOException {
+              buffer.put(b.array(), off, len);
+            }
+
+            @Override
+            public void flush() throws IOException {
+            }
+          };
+
+      return new OzoneDataStreamOutputStub(byteBufferStreamOutput, key + size);
     }
   }
 

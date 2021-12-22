@@ -20,6 +20,22 @@
 
 package org.apache.hadoop.ozone.s3.endpoint;
 
+import org.apache.hadoop.hdds.client.ReplicationFactor;
+import org.apache.hadoop.hdds.client.ReplicationType;
+import org.apache.hadoop.hdds.conf.OzoneConfiguration;
+import org.apache.hadoop.ozone.OzoneConsts;
+import org.apache.hadoop.ozone.client.OzoneBucket;
+import org.apache.hadoop.ozone.client.OzoneClient;
+import org.apache.hadoop.ozone.client.OzoneClientStub;
+import org.apache.hadoop.ozone.s3.endpoint.CompleteMultipartUploadRequest.Part;
+import org.apache.hadoop.ozone.s3.exception.OS3Exception;
+import org.apache.hadoop.ozone.s3.exception.S3ErrorTable;
+import org.apache.hadoop.ozone.web.utils.OzoneUtils;
+import org.junit.Assert;
+import org.junit.BeforeClass;
+import org.junit.Test;
+import org.mockito.Mockito;
+
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.Response;
 import java.io.ByteArrayInputStream;
@@ -32,32 +48,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
 
-import org.apache.hadoop.hdds.client.ReplicationFactor;
-import org.apache.hadoop.hdds.client.ReplicationType;
-import org.apache.hadoop.hdds.conf.OzoneConfiguration;
-import org.apache.hadoop.ozone.OzoneConsts;
-import org.apache.hadoop.ozone.client.OzoneBucket;
-import org.apache.hadoop.ozone.client.OzoneClient;
-import org.apache.hadoop.ozone.client.OzoneClientStub;
-import org.apache.hadoop.ozone.s3.endpoint.CompleteMultipartUploadRequest.Part;
-import org.apache.hadoop.ozone.s3.exception.OS3Exception;
-
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.apache.hadoop.ozone.s3.util.S3Consts.COPY_SOURCE_HEADER;
 import static org.apache.hadoop.ozone.s3.util.S3Consts.COPY_SOURCE_HEADER_RANGE;
 import static org.apache.hadoop.ozone.s3.util.S3Consts.COPY_SOURCE_IF_MODIFIED_SINCE;
 import static org.apache.hadoop.ozone.s3.util.S3Consts.COPY_SOURCE_IF_UNMODIFIED_SINCE;
 import static org.apache.hadoop.ozone.s3.util.S3Consts.STORAGE_CLASS_HEADER;
-
-import org.apache.hadoop.ozone.s3.exception.S3ErrorTable;
-import org.apache.hadoop.ozone.web.utils.OzoneUtils;
-import org.junit.Assert;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import org.junit.BeforeClass;
-import org.junit.Test;
-import org.mockito.Mockito;
-
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.when;
 
@@ -65,13 +64,13 @@ import static org.mockito.Mockito.when;
  * Class to test Multipart upload where parts are created with copy header.
  */
 
-public class TestMultipartUploadWithCopy {
+public class TestMultipartStreamUploadWithCopy {
 
   private static final ObjectEndpoint REST = new ObjectEndpoint();
 
-  private static final String KEY = "key2";
-  private static final String EXISTING_KEY = "key1";
-  private static final String EXISTING_KEY_CONTENT = "testkey";
+  private static final String KEY = "MultipartStreamkey2";
+  private static final String EXISTING_KEY = "MultipartStreamkey1";
+  private static final String EXISTING_KEY_CONTENT = "MultipartStreamtestkey";
   private static final OzoneClient CLIENT = new OzoneClientStub();
   private static final long DELAY_MS = 2000;
   private static long sourceKeyLastModificationTime;
@@ -123,7 +122,12 @@ public class TestMultipartUploadWithCopy {
     REST.setClient(CLIENT);
 
     REST.setOzoneConfiguration(new OzoneConfiguration());
-    REST.setDatastreamEnabled(false);
+    REST.setDatastreamEnabled(true);
+  }
+
+  @Test
+  public void testEnableStream() {
+    assertTrue(REST.isDatastreamEnabled());
   }
 
   @Test
