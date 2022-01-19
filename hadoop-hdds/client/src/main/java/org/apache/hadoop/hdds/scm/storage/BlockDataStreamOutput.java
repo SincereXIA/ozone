@@ -410,8 +410,13 @@ public class BlockDataStreamOutput implements ByteBufferStreamOutput {
     } else {
       byteBufferList = null;
     }
-    flush();
     BlockData blockData = containerBlockData.build();
+    try {
+      CompletableFuture.allOf(futures.toArray(EMPTY_FUTURE_ARRAY)).get();
+    } catch (Exception e) {
+      LOG.warn("Failed to write all chunks through stream: " + e);
+      throw new IOException(e);
+    }
     if (close) {
       out.writeAsync(ByteBuffer.allocateDirect(0).asReadOnlyBuffer())
           .whenCompleteAsync((r, e) -> {
@@ -492,11 +497,14 @@ public class BlockDataStreamOutput implements ByteBufferStreamOutput {
 
   @Override
   public void flush() throws IOException {
-    try {
-      CompletableFuture.allOf(futures.toArray(EMPTY_FUTURE_ARRAY)).get();
-    } catch (Exception e) {
-      LOG.warn("Failed to write all chunks through stream: " + e);
-      throw new IOException(e);
+    if (xceiverClientFactory != null && xceiverClient != null
+        && !config.isStreamBufferFlushDelay()) {
+      try {
+        CompletableFuture.allOf(futures.toArray(EMPTY_FUTURE_ARRAY)).get();
+      } catch (Exception e) {
+        LOG.warn("Failed to write all chunks through stream: " + e);
+        throw new IOException(e);
+      }
     }
   }
 
