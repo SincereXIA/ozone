@@ -311,7 +311,8 @@ public class BlockDataStreamOutput implements ByteBufferStreamOutput {
         .getDataStreamMaxBufferSize());
     long boundary = config.getDataStreamBufferFlushSize() / config
         .getDataStreamMaxBufferSize();
-    if (!bufferList.isEmpty() && bufferList.size() % boundary == 0) {
+    if (!bufferList.isEmpty() && bufferList.size() % boundary == 0 &&
+        buffersForPutBlock != null && !buffersForPutBlock.isEmpty()) {
       updateFlushLength();
       executePutBlock(false, false);
     }
