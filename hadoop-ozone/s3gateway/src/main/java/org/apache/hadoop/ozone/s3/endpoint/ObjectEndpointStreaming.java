@@ -192,9 +192,8 @@ final class ObjectEndpointStreaming {
     String key = target.getRight();
 
     try {
-      OzoneDataStreamOutput ozoneStreamOutput =
-          ozoneBucket.createMultipartStreamKey(
-              key, length, partNumber, uploadID);
+      OzoneDataStreamOutput ozoneStreamOutput = ozoneBucket
+          .createMultipartStreamKey(key, length, partNumber, uploadID);
 
       Long sourceKeyModificationTime = sourceBucket.
           getKey(sourceKey).getModificationTime().toEpochMilli();
@@ -235,6 +234,7 @@ final class ObjectEndpointStreaming {
 
       String eTag = "";
       if (ozoneStreamOutput != null) {
+        ozoneStreamOutput.close();
         OmMultipartCommitUploadPartInfo omMultipartCommitUploadPartInfo =
             ozoneStreamOutput.getCommitUploadPartInfo();
         eTag = omMultipartCommitUploadPartInfo.getPartName();
