@@ -243,7 +243,7 @@ final class ObjectEndpointStreaming {
                 "Bytes to skip: "
                     + rangeHeader.getStartOffset() + " actual: " + skipped);
           }
-
+          sourceObject.seek(rangeHeader.getStartOffset());
           writeToStreamOutput(ozoneStreamOutput, sourceObject, chunkSize,
               rangeHeader.getEndOffset() - rangeHeader.getStartOffset() +
                   1);
