@@ -614,7 +614,7 @@ public class ObjectEndpoint extends EndpointBase {
           return ObjectEndpointStreaming
               .copyMultipartKey(Pair.of(sourceOzoneBucket, sourceKey),
                   Pair.of(ozoneBucket, key), length, partNumber, uploadID,
-                  chunkSize, headers);
+                  chunkSize, headers.getRequestHeaders());
         } else if (datastreamEnabled) {
           return ObjectEndpointStreaming
               .createMultipartKey(ozoneBucket, key, length, partNumber,

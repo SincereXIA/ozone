@@ -34,13 +34,15 @@ import org.apache.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.core.HttpHeaders;
+import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.Response;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
 import static org.apache.hadoop.ozone.om.OMConfigKeys.OZONE_OM_ENABLE_FILESYSTEM_PATHS;
@@ -179,11 +181,29 @@ final class ObjectEndpointStreaming {
     }
   }
 
+  private static String getHeaderByKey(MultivaluedMap<String, String> headers,
+                                       String name) {
+    List<String> values = headers.get(name);
+    if (values == null) {
+      return null;
+    }
+    if (values.isEmpty()) {
+      return "";
+    }
+
+    final Iterator<String> valuesIterator = values.iterator();
+    if (valuesIterator.hasNext()) {
+      return valuesIterator.next();
+    }
+
+    return "";
+  }
+
   public static Response copyMultipartKey(Pair<OzoneBucket, String> source,
                                           Pair<OzoneBucket, String> target,
                                           long length, int partNumber,
                                           String uploadID, int chunkSize,
-                                          HttpHeaders headers)
+                                          MultivaluedMap<String, String> headers)
       throws IOException, OS3Exception {
 
     OzoneBucket sourceBucket = source.getLeft();
@@ -198,9 +218,9 @@ final class ObjectEndpointStreaming {
       Long sourceKeyModificationTime = sourceBucket.
           getKey(sourceKey).getModificationTime().toEpochMilli();
       String copySourceIfModifiedSince =
-          headers.getHeaderString(COPY_SOURCE_IF_MODIFIED_SINCE);
+          getHeaderByKey(headers, COPY_SOURCE_IF_MODIFIED_SINCE);
       String copySourceIfUnmodifiedSince =
-          headers.getHeaderString(COPY_SOURCE_IF_UNMODIFIED_SINCE);
+          getHeaderByKey(headers, COPY_SOURCE_IF_UNMODIFIED_SINCE);
       if (!ObjectEndpoint
           .checkCopySourceModificationTime(sourceKeyModificationTime,
               copySourceIfModifiedSince, copySourceIfUnmodifiedSince)) {
@@ -212,7 +232,7 @@ final class ObjectEndpointStreaming {
                sourceBucket.readKey(sourceKey)) {
 
         String range =
-            headers.getHeaderString(COPY_SOURCE_HEADER_RANGE);
+            getHeaderByKey(headers, COPY_SOURCE_HEADER_RANGE);
         if (range != null) {
           RangeHeader rangeHeader =
               RangeHeaderParserUtil.parseRangeHeader(range, 0);
