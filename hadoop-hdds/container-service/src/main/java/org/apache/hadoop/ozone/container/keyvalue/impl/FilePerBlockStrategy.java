@@ -116,7 +116,7 @@ public class FilePerBlockStrategy implements ChunkManager {
     }
 
     return new KeyValueStreamDataChannel(chunkFile,
-        container.getContainerData(), metrics);
+        container, blockManager, metrics);
   }
 
   @Override

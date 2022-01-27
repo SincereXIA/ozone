@@ -186,11 +186,19 @@ public final class ContainerProtocolCalls  {
       XceiverClientSpi xceiverClient, BlockData containerBlockData, boolean eof,
       Token<? extends TokenIdentifier> token)
       throws IOException, InterruptedException, ExecutionException {
+    String id = xceiverClient.getPipeline().getFirstNode().getUuidString();
+    ContainerCommandRequestProto request =
+        getPutBlockRequest(id, containerBlockData, eof, token);
+    return xceiverClient.sendCommandAsync(request);
+  }
+
+  public static ContainerCommandRequestProto getPutBlockRequest(
+      String id, BlockData containerBlockData, boolean eof,
+      Token<? extends TokenIdentifier> token) throws IOException {
     PutBlockRequestProto.Builder createBlockRequest =
         PutBlockRequestProto.newBuilder()
             .setBlockData(containerBlockData)
             .setEof(eof);
-    String id = xceiverClient.getPipeline().getFirstNode().getUuidString();
     ContainerCommandRequestProto.Builder builder =
         ContainerCommandRequestProto.newBuilder().setCmdType(Type.PutBlock)
             .setContainerID(containerBlockData.getBlockID().getContainerID())
@@ -199,8 +207,7 @@ public final class ContainerProtocolCalls  {
     if (token != null) {
       builder.setEncodedToken(token.encodeToUrlString());
     }
-    ContainerCommandRequestProto request = builder.build();
-    return xceiverClient.sendCommandAsync(request);
+    return builder.build();
   }
 
   /**

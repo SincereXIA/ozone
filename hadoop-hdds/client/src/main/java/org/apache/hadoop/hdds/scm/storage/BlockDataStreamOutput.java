@@ -61,6 +61,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.apache.hadoop.hdds.scm.storage.ContainerProtocolCalls.getPutBlockRequest;
 import static org.apache.hadoop.hdds.scm.storage.ContainerProtocolCalls.putBlockAsync;
 
 /**
@@ -410,12 +411,37 @@ public class BlockDataStreamOutput implements ByteBufferStreamOutput {
       byteBufferList = null;
     }
     flush();
+    BlockData blockData = containerBlockData.build();
     if (close) {
-      dataStreamCloseReply = out.closeAsync();
+      out.writeAsync(ByteBuffer.allocateDirect(0).asReadOnlyBuffer())
+          .whenCompleteAsync((r, e) -> {
+            if (e != null || !r.isSuccess()) {
+              if (e == null) {
+                e = new IOException("result is not success");
+              }
+              String msg =
+                  "Failed to write empty chunk into block " + blockID;
+              LOG.warn("{}, exception: {}", msg, e.getLocalizedMessage());
+              CompletionException ce = new CompletionException(msg, e);
+              setIoException(ce);
+              throw ce;
+            }
+          }, responseExecutor).join();
+
+      ContainerProtos.ContainerCommandRequestProto putBlockRequest =
+          getPutBlockRequest(
+              xceiverClient.getPipeline().getFirstNode().getUuidString(),
+              blockData, close, token);
+
+      ByteBuffer putBlockBuf =
+          ContainerCommandRequestMessage.toMessage(putBlockRequest, null)
+              .getContent().asReadOnlyByteBuffer();
+
+      dataStreamCloseReply =
+          out.writeAsync(putBlockBuf, StandardWriteOption.CLOSE);
     }
 
     try {
-      BlockData blockData = containerBlockData.build();
       XceiverClientReply asyncReply =
           putBlockAsync(xceiverClient, blockData, close, token);
       final CompletableFuture<ContainerCommandResponseProto> flushFuture
