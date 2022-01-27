@@ -19,6 +19,7 @@ set -euo pipefail
 
 SCRIPTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 REPORT_NAME=${1:-jar-report.txt}
+REPORT_NAME_TMP=$REPORT_NAME".tmp"
 
 cd "$SCRIPTDIR/../../.." || exit 1
 
@@ -30,4 +31,10 @@ cd "$OZONE_DIST_DIR"
 
 #sed expression removes the version. Usually license is not changed with version bumps
 #jacoco and test dependencies are excluded
-find . -type f -name "*.jar" | cut -c3- | perl -wpl -e 's/-[0-9]+(.[0-9a-z]+)*(-([0-9a-z]+-)?SNAPSHOT)?+//g; s/\.v\d+\.jar/.jar/g;' | grep -v -e jacoco -e hdds-test-utils | sort > "$SCRIPTDIR"/$REPORT_NAME
+find . -type f -iname "*ratis*.jar" | cut -c3- | perl -wpl -e 's/-[0-9]+(.[0-9a-z]+)*(-([0-9a-z]+-)?SNAPSHOT)?+//g; s/\.v\d+\.jar/.jar/g;' > "$SCRIPTDIR"/$REPORT_NAME_TMP
+
+find . -type f -name "*.jar" | grep -v ratis | cut -c3- | perl -wpl -e 's/-[0-9]+(.[0-9]+)*(-([0-9a-z]+-)?SNAPSHOT)?+//g; s/\.v\d+\.jar/.jar/g;' | grep -v -e jacoco -e hdds-test-utils >> "$SCRIPTDIR"/$REPORT_NAME_TMP
+
+cat "$SCRIPTDIR"/$REPORT_NAME_TMP | sort > "$SCRIPTDIR"/$REPORT_NAME
+
+rm -f "$SCRIPTDIR"/$REPORT_NAME_TMP
