@@ -90,6 +90,7 @@ public class TestObjectPutWithStream {
     ByteArrayInputStream body =
         new ByteArrayInputStream(CONTENT.getBytes(UTF_8));
     objectEndpoint.setHeaders(headers);
+    objectEndpoint.init();
 
     //WHEN
     Response response = objectEndpoint.put(bucketName, keyName, CONTENT
@@ -112,6 +113,7 @@ public class TestObjectPutWithStream {
     //GIVEN
     HttpHeaders headers = Mockito.mock(HttpHeaders.class);
     objectEndpoint.setHeaders(headers);
+    objectEndpoint.init();
 
     String chunkedContent = "0a;chunk-signature=signature\r\n"
         + "1234567890\r\n"
@@ -144,6 +146,7 @@ public class TestObjectPutWithStream {
         new ByteArrayInputStream(CONTENT.getBytes(UTF_8));
     objectEndpoint.setHeaders(headers);
     keyName = "sourceKey";
+    objectEndpoint.init();
 
     Response response = objectEndpoint.put(bucketName, keyName,
         CONTENT.length(), 1, null, body);
@@ -253,6 +256,7 @@ public class TestObjectPutWithStream {
     ByteArrayInputStream body =
         new ByteArrayInputStream(CONTENT.getBytes(UTF_8));
     objectEndpoint.setHeaders(headers);
+    objectEndpoint.init();
     keyName = "sourceKey";
     when(headers.getHeaderString(STORAGE_CLASS_HEADER)).thenReturn("");
 

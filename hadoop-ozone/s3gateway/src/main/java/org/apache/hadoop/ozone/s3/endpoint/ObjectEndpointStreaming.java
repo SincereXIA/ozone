@@ -200,10 +200,8 @@ final class ObjectEndpointStreaming {
   }
 
   public static Response copyMultipartKey(Pair<OzoneBucket, String> source,
-                                          Pair<OzoneBucket, String> target,
-                                          long length, int partNumber,
-                                          String uploadID, int chunkSize,
-                                          MultivaluedMap<String, String> headers)
+      Pair<OzoneBucket, String> target, long length, int partNumber,
+      String uploadID, int chunkSize, MultivaluedMap<String, String> headers)
       throws IOException, OS3Exception {
 
     OzoneBucket sourceBucket = source.getLeft();

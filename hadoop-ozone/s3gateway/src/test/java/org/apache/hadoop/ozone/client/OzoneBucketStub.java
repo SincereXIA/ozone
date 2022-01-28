@@ -122,6 +122,49 @@ public class OzoneBucketStub extends OzoneBucket {
   }
 
   @Override
+  public OzoneDataStreamOutput createStreamKey(String key, long size,
+      ReplicationConfig replicationConfig, Map<String, String> keyMetadata)
+      throws IOException {
+    ByteBufferStreamOutput byteBufferStreamOutput =
+        new ByteBufferStreamOutput() {
+
+          private final ByteBuffer buffer = ByteBuffer.allocate((int) size);
+          private final ReplicationFactor factor = ReplicationFactor.THREE;
+          private final ReplicationType type = ReplicationType.RATIS;
+
+          @Override
+          public void close() throws IOException {
+            buffer.flip();
+            byte[] bytes1 = new byte[buffer.remaining()];
+            buffer.get(bytes1);
+            keyContents.put(key, bytes1);
+            keyDetails.put(key, new OzoneKeyDetails(
+                getVolumeName(),
+                getName(),
+                key,
+                size,
+                System.currentTimeMillis(),
+                System.currentTimeMillis(),
+                new ArrayList<>(), type, metadata, null,
+                factor.getValue()
+            ));
+          }
+
+          @Override
+          public void write(ByteBuffer b, int off, int len)
+              throws IOException {
+            buffer.put(b.array(), off, len);
+          }
+
+          @Override
+          public void flush() throws IOException {
+          }
+        };
+
+    return new OzoneDataStreamOutputStub(byteBufferStreamOutput, key + size);
+  }
+
+  @Override
   public OzoneInputStream readKey(String key) throws IOException {
     return new OzoneInputStream(new ByteArrayInputStream(keyContents.get(key)));
   }
