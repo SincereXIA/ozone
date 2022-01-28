@@ -129,6 +129,10 @@ final class ObjectEndpointStreaming {
     ByteBuffer writeByteBuffer;
     long total = 0;
     do {
+      int realBufferSize = (int) (length - total);
+      if (realBufferSize < bufferSize) {
+        buffer = new byte[realBufferSize];
+      }
       int nn = body.read(buffer);
       if (nn == -1) {
         break;
@@ -234,6 +238,7 @@ final class ObjectEndpointStreaming {
         if (range != null) {
           RangeHeader rangeHeader =
               RangeHeaderParserUtil.parseRangeHeader(range, 0);
+          LOG.info("Copy range {} after parse {}", range, rangeHeader);
           final long skipped =
               sourceObject.skip(rangeHeader.getStartOffset());
           if (skipped != rangeHeader.getStartOffset()) {
