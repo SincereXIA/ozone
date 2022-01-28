@@ -130,7 +130,7 @@ final class ObjectEndpointStreaming {
     long total = 0;
     do {
       int realBufferSize = (int) (length - total);
-      if (realBufferSize < bufferSize) {
+      if (realBufferSize > 0 && realBufferSize < bufferSize) {
         buffer = new byte[realBufferSize];
       }
       int nn = body.read(buffer);
