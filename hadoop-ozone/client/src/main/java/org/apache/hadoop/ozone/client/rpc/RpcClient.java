@@ -1590,7 +1590,7 @@ public class RpcClient implements ClientProtocol {
       String requestId, ReplicationConfig replicationConfig, long size)
       throws IOException {
     // size == 0, can be represented as borderless
-    if (size <= chunkSize && size != 0) {
+    if (size <= chunkSize / 4 && size != 0) {
       SmallFileDataStreamOutput smallFileDataStreamOutput =
           new SmallFileDataStreamOutput(openKey, xceiverClientManager,
               ozoneManagerClient, clientConfig, unsafeByteBufferConversion);
