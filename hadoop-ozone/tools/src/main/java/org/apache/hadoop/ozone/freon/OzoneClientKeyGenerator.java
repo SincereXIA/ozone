@@ -22,13 +22,16 @@ import java.util.Map;
 import java.util.concurrent.Callable;
 
 import org.apache.hadoop.hdds.cli.HddsVersionProvider;
+import org.apache.hadoop.hdds.client.ReplicationConfig;
 import org.apache.hadoop.hdds.client.ReplicationFactor;
 import org.apache.hadoop.hdds.client.ReplicationType;
+import org.apache.hadoop.hdds.conf.ConfigurationSource;
 import org.apache.hadoop.hdds.conf.OzoneConfiguration;
 import org.apache.hadoop.ozone.client.OzoneBucket;
 import org.apache.hadoop.ozone.client.OzoneClient;
 
 import com.codahale.metrics.Timer;
+import org.apache.hadoop.ozone.client.io.OzoneDataStreamOutput;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
@@ -78,6 +81,13 @@ public class OzoneClientKeyGenerator extends BaseFreonGenerator
   )
   private String omServiceID = null;
 
+  @Option(
+      names = "--datastream-enable",
+      description = "Enable streaming when write or not",
+      defaultValue = "true"
+  )
+  private boolean datastreamEnable = true;
+
   private Timer timer;
 
   private OzoneBucket bucket;
@@ -111,10 +121,20 @@ public class OzoneClientKeyGenerator extends BaseFreonGenerator
     final String key = generateObjectName(counter);
 
     timer.time(() -> {
-      try (OutputStream stream = bucket.createKey(key, keySize,
-              ReplicationType.RATIS, factor, metadata)) {
-        contentGenerator.write(stream);
-        stream.flush();
+      ConfigurationSource conf = new OzoneConfiguration();
+      ReplicationConfig replicationConfig =
+              ReplicationConfig.parse(ReplicationType.RATIS, factor.toString(), conf);
+      if (datastreamEnable) {
+        try (OzoneDataStreamOutput stream = bucket.createStreamKey(key, keySize, replicationConfig, metadata)) {
+          contentGenerator.write(stream);
+          stream.flush();
+        }
+      } else {
+        try (OutputStream stream = bucket.createKey(key, keySize,
+                replicationConfig, metadata)) {
+          contentGenerator.write(stream);
+          stream.flush();
+        }
       }
       return null;
     });
