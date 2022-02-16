@@ -55,19 +55,19 @@ public class OzoneClientConfig {
   private int streamBufferSize = 4 * 1024 * 1024;
 
   @Config(key = "datastream.buffer.flush.size",
-      defaultValue = "256MB",
+      defaultValue = "16MB",
       type = ConfigType.SIZE,
       description = "The boundary at which putBlock is executed",
       tags = ConfigTag.CLIENT)
-  private long dataStreamBufferFlushSize = 256 * 1024 * 1024;
+  private long dataStreamBufferFlushSize = 16 * 1024 * 1024;
 
   @Config(key = "datastream.min.packet.size",
-      defaultValue = "512KB",
+      defaultValue = "1MB",
       type = ConfigType.SIZE,
       description = "The maximum size of the ByteBuffer "
           + "(used via ratis streaming)",
       tags = ConfigTag.CLIENT)
-  private int dataStreamMinPacketSize = 512 * 1024;
+  private int dataStreamMinPacketSize = 1024 * 1024;
 
   @Config(key = "datastream.window.size",
       defaultValue = "64MB",
