@@ -212,6 +212,10 @@ public class ObjectEndpoint extends EndpointBase {
       if ("STREAMING-AWS4-HMAC-SHA256-PAYLOAD"
           .equals(headers.getHeaderString("x-amz-content-sha256"))) {
         body = new SignedChunksInputStream(body);
+        long decodedLength = Integer.parseInt(headers.getHeaderString("X-Amz-Decoded-Content-Length"));
+        if (decodedLength > 0) {
+          length = decodedLength;
+        }
       }
 
       if (datastreamEnabled) {
