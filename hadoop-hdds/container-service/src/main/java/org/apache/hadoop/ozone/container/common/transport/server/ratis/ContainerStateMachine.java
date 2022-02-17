@@ -862,6 +862,41 @@ public class ContainerStateMachine extends BaseStateMachine {
       }
       CompletableFuture<Message> applyTransactionFuture =
           new CompletableFuture<>();
+
+
+      if (requestProto.getCmdType() == Type.StreamInit) {
+        ContainerCommandResponseProto r =
+            runCommand(requestProto, builder.build());
+        if (r.getResult() != ContainerProtos.Result.SUCCESS
+            && r.getResult() != ContainerProtos.Result.CONTAINER_NOT_OPEN
+            && r.getResult() != ContainerProtos.Result.CLOSED_CONTAINER_IO) {
+          StorageContainerException sce =
+              new StorageContainerException(r.getMessage(), r.getResult());
+          LOG.error(
+              "gid {} : ApplyTransaction failed. cmd {} logIndex {} msg : "
+                  + "{} Container Result: {}", gid, r.getCmdType(), index,
+              r.getMessage(), r.getResult());
+          metrics.incNumApplyTransactionsFails();
+          // Since the applyTransaction now is completed exceptionally,
+          // before any further snapshot is taken , the exception will be
+          // caught in stateMachineUpdater in Ratis and ratis server will
+          // shutdown.
+          applyTransactionFuture.completeExceptionally(sce);
+          stateMachineHealthy.compareAndSet(true, false);
+          ratisServer.handleApplyTransactionFailure(gid, trx.getServerRole());
+        } else {
+          applyTransactionFuture.complete(r::toByteString);
+        }
+
+        applyTransactionSemaphore.release();
+        metrics.recordApplyTransactionCompletion(
+            Time.monotonicNowNanos() - applyTxnStartTime);
+
+        return applyTransactionFuture;
+      }
+
+
+
       final Consumer<Exception> exceptionHandler = e -> {
         LOG.error("gid {} : ApplyTransaction failed. cmd {} logIndex "
             + "{} exception {}", gid, requestProto.getCmdType(), index, e);
