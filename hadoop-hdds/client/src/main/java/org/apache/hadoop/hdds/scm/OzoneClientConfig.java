@@ -62,12 +62,12 @@ public class OzoneClientConfig {
   private long dataStreamBufferFlushSize = 256 * 1024 * 1024;
 
   @Config(key = "datastream.min.packet.size",
-      defaultValue = "64KB",
+      defaultValue = "1MB",
       type = ConfigType.SIZE,
       description = "The maximum size of the ByteBuffer "
           + "(used via ratis streaming)",
       tags = ConfigTag.CLIENT)
-  private int dataStreamMinPacketSize = 64 * 1024;
+  private int dataStreamMinPacketSize = 1024 * 1024;
 
   @Config(key = "datastream.window.size",
       defaultValue = "64MB",
