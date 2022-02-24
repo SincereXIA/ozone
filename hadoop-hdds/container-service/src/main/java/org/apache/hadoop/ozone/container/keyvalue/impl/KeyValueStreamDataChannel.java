@@ -100,6 +100,7 @@ class KeyValueStreamDataChannel extends StreamDataChannelBase {
 
     if (metadataLen <= 0) {
       String msg = "Put block miss writeLen: " + writeLen;
+      super.close();
       throw new StorageContainerException(msg,
           ContainerProtos.Result.INVALID_WRITE_SIZE);
     }
@@ -112,6 +113,7 @@ class KeyValueStreamDataChannel extends StreamDataChannelBase {
         LOG.debug("Malformed Put Block request. trace ID: {}",
             request.getTraceID());
       }
+      super.close();
       throw new StorageContainerException("Malformed Put Block request.",
           ContainerProtos.Result.MALFORMED_REQUEST);
     }
